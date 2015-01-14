@@ -1,207 +1,304 @@
 #Created by Alexandre Campos in 12/25/2014
-#Last modification 01/03/2015
+#Last modification 01/14/2015
 
-#Libraries
-import pygame, random, math, timeit, sys
-
-# Initialize the game engine
-pygame.init()
+import pygame, random, math, os, sys, timeit
+os.system("clear")
 
 # Define some colors
-BLACK    = (   0,   0,   0)
-WHITE    = ( 255, 255, 255)
-BLUE     = (   0,   0, 255)
-GREEN    = (   0, 255,   0)
-RED      = ( 255,   0,   0)
+BLACK	= (   0,   0,   0)
+WHITE	= ( 255, 255, 255)
+LGRAY	= ( 200, 200, 200)
+RED		= ( 255,   0,   0)
+GREEN	= (   0, 255,   0)
+BLUE	= (   0,   0, 255)
 
-# Set the height and width of the screen
-size = (800, 450)
-screen = pygame.display.set_mode(size)
+pygame.init()
 
-class ball:
-    """The objects."""
-
-    def __init__(self, x, y, velocity, radius, angle, color=(0,0,0)):
-        self.x = x
-        self.y = y
-        self.velocity = velocity
-        self.radius = radius
-        self.direction = [math.cos(2*math.pi*angle/360), math.sin(2*math.pi*angle/360)]
-        self.color = color
-
-        #Check if the initial ball isn't beyond the screen
-        if self.x < offset+self.radius+1: self.x = offset+radius+1
-        elif self.x > size[0]-offset-self.radius-1: self.x = size[0]-offset-self.radius-1
-
-        if self.y < offset+self.radius+1: self.y = offset+radius+1
-        elif self.y > size[1]-offset-self.radius-1: self.y = size[1]-offset-self.radius-1
-
-    #Updates it
-    def update(self):
-
-        #New position of the ball based on its direction
-        self.x += self.velocity*self.direction[0]
-        self.y += self.velocity*self.direction[1]
-
-        #Check colision with border
-        if self.x-offset-self.radius <= 0 or self.x+offset+self.radius >= size[0]: self.direction[0] *= -1
-        if self.y-offset-self.radius <= 0 or self.y+offset+self.radius >= size[1]: self.direction[1] *= -1
-
+# Set the width and height of the screen [width, height]
+SIZE = (800, 450)
+screen = pygame.display.set_mode(SIZE)
 pygame.display.set_caption("Animated Ball")
 
-#Loop until the user clicks the close button.
-done = False
+# Used to manage how fast the screen updates
 clock = pygame.time.Clock()
 
-#time of each level
-time = 5
-
-#Size of the limit rectangle
-offset = 20
-limit = [offset, offset, size[0]-2*offset, size[1]-2*offset]
-
+# Fonts
 font = pygame.font.SysFont('Calibri', 30, True, False)
 font2 = pygame.font.SysFont('Impact', 40, False, False)
 
-#The welcome message.
-welcome=("Welcome to the ball game.",
-    "Your objective is to keep the mouse away from the balls.",
-    "If one ball hits the mouse or the mouse escapes the rectangle, the game ends.",
-    "Survive as long as you can!")
+class Ball:
+	"""The objects."""
 
-screen.fill(WHITE)
+	def __init__(self, x, y, velocity, radius, color):
+		self.x = x
+		self.y = y
+		self.velocity = velocity
+		self.radius = radius
+		self.color = color
 
-for i in xrange(4):
-    texto = welcome[i]
-    text = font.render(texto, True, BLUE)
-    screen.blit(text, [offset, offset+i*20])
+		self.center = x, y
 
-pygame.display.flip()
+	def draw(self):
+		pygame.draw.circle(screen, self.color, [int(self.x), int(self.y)], self.radius)
+		pygame.draw.circle(screen, BLACK, [int(self.x), int(self.y)], self.radius, border) # Mask
 
-wait = timeit.default_timer()
-while timeit.default_timer()-wait < 6: pass
+	def update(self):
 
-#Current level
-level = 1
+		self.x += (self.velocity[0])
+		self.y += (self.velocity[1])
 
+		self.x = max(self.x, self.radius+offset)
+		self.y = max(self.y, self.radius+offset)
+
+		self.x = min(self.x, SIZE[0]-self.radius-offset)
+		self.y = min(self.y, SIZE[1]-self.radius-offset)
+
+		self.center = (self.x, self.y)
+
+		# Hit limit rectangle.
+		if self.x+self.radius >= SIZE[0]-offset or self.x-self.radius <= offset: self.velocity[0] = -self.velocity[0]
+		if self.y+self.radius >= SIZE[1]-offset or self.y-self.radius <= offset: self.velocity[1] = -self.velocity[1]
+
+		self.draw()
+
+def Point_Distance(A, B):
+	"""Euclidian distance between A and B."""
+	return int( pow( pow(B[0]-A[0], 2) + pow(B[1]-A[1],2), 0.5 ) )
+
+def generate_ball():
+	"""Generate a random ball."""
+	angle = random.random()*2*math.pi # Generates initial angle
+	vel = random.randint(0, 10) # Generates initial velocity
+
+	radius = random.randint(10, 20) # Radius
+	x = random.randint(radius+offset, SIZE[0]-radius-offset) # Initial x
+	y = random.randint(radius+offset, SIZE[1]-radius-offset) # Initial y
+	velocity = [vel*math.cos(angle), vel*math.sin(angle)] # Initial vector velocity
+	color = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+
+	return Ball(x, y, velocity, radius, color)
+
+def hit(b1, b2):
+	"""Check if b1 and b2 are touching each other."""
+	return Point_Distance((b1.x, b1.y), (b2.x, b2.y)) <= b1.radius+b2.radius
+
+def collision(b1, b2):
+	"""Check ball collisions and vectorial behavior."""
+
+	# http://gamedevelopment.tutsplus.com/tutorials/when-worlds-collide-simulating-circle-circle-collisions--gamedev-769
+
+	if hit(b1, b2):
+		v1 = b1.velocity
+		v2 = b2.velocity
+		m1 = b1.radius
+		m2 = b2.radius
+
+		b1.velocity=[(v1[0]*(m1-m2)+(2*m2*v2[0]))/(m1+m2), (v1[1]*(m1-m2)+(2*m2*v2[1]))/(m1+m2)]
+		b2.velocity=[(v2[0]*(m2-m1)+(2*m1*v1[0]))/(m1+m2), (v2[1]*(m2-m1)+(2*m1*v1[1]))/(m1+m2)]
+
+		# Avoid the balls stick together. Perhaps this will bug if the ball is to close of the border.
+		while hit(b1, b2): # Causes strange moves.
+			b1.x+=b1.velocity[0]
+			b1.y+=b1.velocity[1]
+
+			b2.x+=b2.velocity[0]
+			b2.y+=b2.velocity[1]
+
+def wait(n):
+	"""Just wait and gives the option to quit."""
+	start = timeit.default_timer()
+	while True:
+		wait_quit()
+		if timeit.default_timer()-start > n: break
+
+def draw_bg():
+	"""Draw background."""
+	pygame.draw.rect(screen, BLACK, [offset, offset, SIZE[0]-2*offset, SIZE[1]-2*offset], border)
+
+def draw_info(now, start, color):
+	"""What level, what time."""
+
+	info1 = font2.render("Level: %s"%level, True, color)
+	info2 = font2.render("Time: %s"%((level-1)*time+int(now-start)), True, color)
+	info3 = font2.render("Score: %s"%(score/100), True, color)
+	screen.blit(info1, [offset, offset])
+	screen.blit(info2, [offset+SIZE[0]/4, offset])
+	screen.blit(info3, [offset+SIZE[0]/2, offset])
+
+def regressive_counter(n):
+	"""Regressive count."""
+	start = timeit.default_timer()
+
+	while True:
+
+		wait_quit()
+
+		screen.fill(WHITE) # Clear
+		draw_bg() # Background
+		draw_info(0, 0, LGRAY) # Level info
+
+		for bola in balls: bola.draw()
+
+		counter = font2.render("%s"%(3-int(timeit.default_timer()-start)), True, BLUE)
+		screen.blit(counter, [SIZE[0]/2, SIZE[1]/2])
+
+		# Update screen.
+		draw_it_all()
+
+		if timeit.default_timer()-start > n: break
+
+def draw_it_all(tick = 60):
+	"""Draw everything."""
+
+	# Go ahead and update the screen with what we've drawn.
+	pygame.display.flip()
+
+	# Limit frames per second
+	clock.tick(tick)
+
+def end_game(what, ball = None):
+
+	while True:
+
+		wait_quit()
+
+		if what == "mouse":
+
+			screen.fill(RED)
+			pygame.draw.rect(screen, WHITE, [offset, offset, SIZE[0]-2*offset, SIZE[1]-2*offset])
+			draw_bg()
+			draw_info(now, start, LGRAY)
+
+		elif what == "collision":
+
+			screen.fill(WHITE)
+			draw_bg()
+			draw_info(now, start, LGRAY)
+
+			# Ball that caused lost.
+			b.color = RED
+			b.draw()
+
+		game_over = font.render("You lost in level %s and your score was %s."%(level, score), True, BLACK)
+		x, y = game_over.get_size()
+
+		screen.blit(game_over, [ (SIZE[0]-x)/2, (SIZE[1]-y)/2 ])
+
+		draw_it_all(10)
+
+def wait_quit():
+	"""Checks if quit."""
+	for event in pygame.event.get(): # User did something
+		if event.type == pygame.QUIT: # If user clicked close
+			pygame.quit()
+			sys.exit(0)
+
+def welcome():
+	"""Opening message."""
+
+	screen.fill(WHITE)
+
+	#The welcome message.
+	msg=("Welcome to the ball game.",
+		"Your objective is to keep the mouse away from the balls.",
+		"If one ball hits the mouse or the mouse escapes the rectangle, the game ends.",
+		"The more the mouse moves, the best is your score.",
+		"Survive as long as you can!")
+
+	for i in xrange(5):
+		text = font.render(msg[i], True, BLUE)
+		screen.blit(text, [offset, offset+i*20])
+
+	pygame.display.flip()
+
+	# Wait the use reads.
+	wait(6)
+
+level = 1 # Current level
+time = 5 # Time of each level
+score = 0
+
+#Size of the limit rectangle
+border = 2
+offset = 20
+
+# Loop until the user clicks the close button.
+done = False
+
+# Opening message
+welcome()
+
+# -------- Main Program Loop -----------
 while True:
 
-    #Draws the balls in initial position
-    balls = []
-    for i in xrange(level):
-        balls.append(    ball(random.randint(0,size[0]), random.randint(0,size[1]), #Initial position
-                random.randint(0,15), #Velocity
-                random.randint(10,20), #Radius
-                random.randint(0, 359), #Initial angle
-                (random.randint(0,250), random.randint(0,250), random.randint(0,250)) #Color
-                ))
+	screen.fill(WHITE)
+	draw_bg() # Background
+	draw_info(0, 0, LGRAY) # Info
 
-    #3 sec message
-    espera = timeit.default_timer()
-    while True:
+	# Loop to create non touching balls
+	balls = []
+	while len(balls) < level:
+		flag = True
 
-        if timeit.default_timer()-espera > 3: break
+		b = generate_ball() # Creates random ball
 
-        screen.fill(WHITE)
+		for item in balls: # Check if it is not touching the other balls
+			if hit(b, item):
+				flag = False
+				break
 
-        #Rectangle limite the ball movement
-        pygame.draw.rect(screen, BLACK, limit, 2)
+		if flag:
+			wait(.1)
+			b.draw()
+			balls.append(b)
 
-        #Current level
-        level_track = font2.render("Level: %s    Time: %s"%(level, (level-1)*time), True, BLUE)
-        screen.blit(level_track, [offset, offset])
+			draw_it_all() # Draws
 
-        #Draws statics balls
-        for b in balls: pygame.draw.circle(screen, b.color, [int(b.x), int(b.y)], b.radius)
+	# Waits to let the player gets used to the balls
+	regressive_counter(3)
 
-        #Regressive timer
-        texto = "%s"%(3-int(timeit.default_timer()-espera))
-        text = font.render(texto, True, BLUE)
-        screen.blit(text, [400, size[1]/2])
+	#Level duration
+	start = timeit.default_timer()
 
-        #Updates screen
-        pygame.display.flip()
+	prev_pos = pygame.mouse.get_pos() # Initial mouse
 
-        clock.tick(60)
+	while not done: # Main event loop
 
-    #Level duration
-    start = timeit.default_timer()
+		wait_quit()
 
-    # Loop as long as done == False
-    while not done:
+		now = timeit.default_timer()
+		pos = pygame.mouse.get_pos() # Mouse now
 
-        mouse_escape = False
-        now = timeit.default_timer()
+		# Did the mouse scape?
+		if pos[0] < offset or pos[0] > SIZE[0]-offset or pos[1] < offset or pos[1] > SIZE[1]-offset:
+			end_game("mouse")
 
-        for event in pygame.event.get(): # User did something
-            if event.type == pygame.QUIT: # If user clicked close
-                pygame.quit()
-                sys.exit(0)
-#               done = True # Flag that we are done so we exit this loop
-         
-        # Clear the screen and set the screen background
-        screen.fill(WHITE)
+		# The most the mouse moves, in advanced level, more points.
+		score += Point_Distance(prev_pos, pos)*level
+		prev_pos = pos
 
-        #Rectangle limite the ball movement
-        pygame.draw.rect(screen, BLACK, limit, 2)
+		screen.fill(WHITE) # Clear
+		draw_bg() # Background
+		draw_info(now, start, BLUE) # Level info
 
-        #Current level
-        level_track = font2.render("Level: %s    Time: %s"%(level, (level-1)*time+int(now-start)), True, BLUE)
-        screen.blit(level_track, [offset, offset])
+		# Look for collisions between the balls
+		for i in xrange(level-1):
+			for j in xrange(i+1, level):
+				collision(balls[i], balls[j])
 
-        #Draws and updates the balls. Check end of the game.
-        for b in balls:
+		# Updates and draw the balls
+		for b in balls:
 
-            #Update ball
-            b.update()
-            pygame.draw.circle(screen, b.color, [int(b.x), int(b.y)], b.radius)
+			# Hit the mouse?
+			if Point_Distance(b.center, pos) <= b.radius:
+				end_game("collision", b)
 
-            #Check if the mouse has scaped
-            if pygame.mouse.get_pos()[0] < offset or pygame.mouse.get_pos()[0] > size[0]-offset: mouse_escape = True
-            if pygame.mouse.get_pos()[1] < offset or pygame.mouse.get_pos()[1] > size[1]-offset: mouse_escape = True
+			b.update()
 
-            #Check mouse colision or mouse scape. Improve mouse scape with limiter rectangle.
-            if (abs(b.x-pygame.mouse.get_pos()[0]) < b.radius and abs(b.y-pygame.mouse.get_pos()[1]) < b.radius) or mouse_escape:
+		# Drawing.
+		draw_it_all()
 
-                #Time of ending game.
-                fim=timeit.default_timer()
-
-                screen.fill(WHITE)
-
-                #Limit rectangle
-                pygame.draw.rect(screen, BLACK, limit, 2)
-
-                #Tells the user about the mouse escape or which ball caused the end of game.
-                if mouse_escape:
-                    pygame.draw.rect(screen, RED, [0, 0, size[0], offset], 0)
-                    pygame.draw.rect(screen, RED, [0, 0, offset, size[1]], 0)
-                    pygame.draw.rect(screen, RED, [0, size[1]-offset, size[0], offset], 0)
-                    pygame.draw.rect(screen, RED, [size[0]-offset, 0, offset, size[1]], 0)
-                else:
-                    pygame.draw.circle(screen, RED, [int(b.x), int(b.y)], b.radius)
-
-                #Ending message.
-                EXIT = "You lost in level %s and survived for %s s."%(level, int((level-1)*time+fim-start))
-                font = pygame.font.SysFont('Calibri', 30, True, False)
-                text = font.render(EXIT, True, BLUE)
-                screen.blit(text, [offset, size[1]/2])
-
-                #Updates screen
-                pygame.display.flip()
-
-                #Waits the player read the message
-                while timeit.default_timer()-fim < 3: clock.tick(60)
-                pygame.quit()
-                sys.exit(0)
-
-        # This limits the while loop to a max of 60 times per second.
-        pygame.display.flip()
-        clock.tick(60)
-
-        #End of level
-        if timeit.default_timer()-start >= time:
-            level += 1
-            break
-
-# Be IDLE friendly
-pygame.quit()
+		#End of level
+		if timeit.default_timer()-start >= time:
+			level += 1
+			break
