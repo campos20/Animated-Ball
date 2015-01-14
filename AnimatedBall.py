@@ -2,7 +2,7 @@
 #Last modification 01/14/2015
 
 import pygame, random, math, os, sys, timeit
-os.system("clear")
+#os.system("clear")
 
 # Define some colors
 BLACK    = (   0,   0,   0)
